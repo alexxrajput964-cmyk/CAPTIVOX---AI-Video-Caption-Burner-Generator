@@ -1,0 +1,6 @@
+{
+  "name": "CAPTIVOX - AI Video Caption Burner & Generator",
+  "description": "AI subtitle generator that burns captions directly into MP4 video for Reels, Shorts, and TikTok with Hindi and Hinglish support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
