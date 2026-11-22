@@ -6,19 +6,16 @@ import {
   Trash2,
   Plus,
   Search,
-  Sparkles,
   Languages,
   Scissors,
-  Check,
   CheckSquare,
   Square,
   Copy,
-  ChevronDown,
-  Palette,
   Clock,
-  ArrowRight,
-  Maximize2,
   X,
+  ArrowUp,
+  ArrowDown,
+  MapPin,
 } from 'lucide-react';
 
 interface SubtitleListPanelProps {
@@ -281,6 +278,25 @@ export const SubtitleListPanel: React.FC<SubtitleListPanelProps> = ({
     };
 
     const updated = [...captions.slice(0, idx + 1), copySeg, ...captions.slice(idx + 1)];
+    onUpdateCaptions(updated);
+  };
+
+  // Move segment up or down in the list
+  const handleMoveSegment = (id: string, direction: 'up' | 'down') => {
+    const idx = captions.findIndex((c) => c.id === id);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= captions.length) return;
+    const updated = [...captions];
+    [updated[idx], updated[targetIdx]] = [updated[targetIdx], updated[idx]];
+    onUpdateCaptions(updated.map((seg, i) => ({ ...seg, idx: i + 1 })));
+  };
+
+  // Clear per-segment custom (X%, Y%) override
+  const handleClearSegmentPosition = (id: string) => {
+    const updated = captions.map((c) =>
+      c.id === id ? { ...c, positionX: undefined, positionY: undefined } : c
+    );
     onUpdateCaptions(updated);
   };
 
@@ -569,11 +585,44 @@ export const SubtitleListPanel: React.FC<SubtitleListPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Actions */}
+                  {/* Right: Actions (Move Up/Down, Custom Pos Badge, Split, Duplicate, Play, Delete) */}
                   <div
                     className="flex items-center gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {(seg.positionX !== undefined || seg.positionY !== undefined) && (
+                      <button
+                        type="button"
+                        onClick={() => handleClearSegmentPosition(seg.id)}
+                        className="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 text-[9px] font-mono flex items-center gap-0.5 hover:bg-cyan-500/25 cursor-pointer"
+                        title="Custom position set for this caption. Click to reset to global position."
+                      >
+                        <MapPin className="w-2.5 h-2.5" />
+                        <span>{seg.positionX ?? 50},{seg.positionY ?? 82}</span>
+                        <X className="w-2.5 h-2.5 ml-0.5" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleMoveSegment(seg.id, 'up')}
+                      disabled={idx === 0}
+                      className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      title="Move caption up"
+                    >
+                      <ArrowUp className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleMoveSegment(seg.id, 'down')}
+                      disabled={idx === captions.length - 1}
+                      className="p-1 rounded hover:bg-neutral-800 text-neutral-400 hover:text-white disabled:opacity-30 cursor-pointer"
+                      title="Move caption down"
+                    >
+                      <ArrowDown className="w-3.5 h-3.5" />
+                    </button>
+
                     {hasHindi && (
                       <button
                         type="button"

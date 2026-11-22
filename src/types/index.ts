@@ -76,19 +76,57 @@ export type LetterSpacing = 'tight' | 'normal' | 'wide' | 'widest';
 export type BackdropStyle = 'none' | 'frosted' | 'minimal_strip' | 'luxury_box' | 'subtle_blur' | 'custom_box';
 export type ShadowStyle = 'soft_cinematic' | 'luxury_glow' | 'subtle_depth' | 'clean_cut' | 'neon_glow' | 'none';
 
-// Visual decorative element layer
+// Visual decorative element layer (movable, editable & burnable anywhere on canvas)
 export interface VisualElement {
   id: string;
-  type: 'badge' | 'box' | 'bar';
+  type: 'badge' | 'box' | 'bar' | 'sticker';
   text?: string;
   x: number; // percentage 0-100
   y: number; // percentage 0-100
   width?: number; // px or %
   height?: number;
+  fontSize?: number; // px scale (10 - 48)
+  fontWeight?: number;
+  rotation?: number; // degrees (-45 to 45)
+  borderRadius?: number; // px
+  opacity?: number; // 0.1 - 1
   textColor?: string;
   bgColor: string;
   borderColor?: string;
   zIndex: number;
+}
+
+export type StudioTabId = 'subtitles' | 'templates' | 'properties' | 'presets';
+
+export interface UICustomizationConfig {
+  // Brand & Editable Texts
+  brandName: string;
+  brandSubtext: string;
+  heroBadgeText: string;
+  heroTitlePrefix: string;
+  heroTitleHighlight: string;
+  heroTitleSuffix: string;
+  heroSubtitle: string;
+  footerAttribution: string;
+  // Theme & Visual Tokens
+  primaryAccent: string;
+  secondaryAccent: string;
+  surfaceBg: string;
+  cardBg: string;
+  uiFont: 'Plus Jakarta Sans' | 'Outfit' | 'DM Sans' | 'Space Grotesk' | 'Courier Prime';
+  cornerRadius: 'sharp' | 'balanced' | 'smooth';
+  density: 'compact' | 'comfortable';
+  // Studio Layout & Movable Panels
+  previewSide: 'left' | 'right' | 'top';
+  splitPercent: number; // 32 to 68
+  templateStripLocation: 'below_video' | 'above_video' | 'hidden';
+  actionBarLocation: 'top' | 'bottom' | 'both';
+  tabOrder: StudioTabId[];
+  hiddenTabs: StudioTabId[];
+  showFastAiBar: boolean;
+  showSafeZoneBar: boolean;
+  showAudioSyncBar: boolean;
+  showCreatorBadge: boolean;
 }
 
 export interface StylePreset {
@@ -120,6 +158,8 @@ export interface CaptionProject {
   position: CaptionPosition;
   position_x?: number; // percentage 0 - 100
   position_y?: number; // percentage 0 - 100
+  rotation?: number; // degrees (-45 to 45)
+  max_width_percent?: number; // 40 to 96
   text_case: TextCase;
   font_family: string;
   font_size: number; // 2 - 16 scale

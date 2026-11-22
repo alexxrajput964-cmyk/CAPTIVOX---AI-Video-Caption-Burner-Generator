@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { UICustomizerProvider, useUICustomizer } from './context/UICustomizerContext';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
@@ -8,10 +9,14 @@ import { AccountView } from './components/AccountView';
 import { AdminView } from './components/AdminView';
 import { LoginModal } from './components/LoginModal';
 import { UpgradeModal } from './components/UpgradeModal';
+import { UICustomizerDrawer } from './components/UICustomizerDrawer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { CaptionProject } from './types';
+import { Edit3, Check, Paintbrush } from 'lucide-react';
 
 function AppContent() {
   const { user, isAuthModalOpen, setIsAuthModalOpen, isUpgradeModalOpen, setIsUpgradeModalOpen, showToast } = useAuth();
+  const { uiConfig, isLiveEditMode, setIsLiveEditMode, setIsCustomizerOpen } = useUICustomizer();
   const [currentTab, setCurrentTab] = useState<'landing' | 'dashboard' | 'editor' | 'account' | 'admin'>('landing');
   const [activeProject, setActiveProject] = useState<CaptionProject | null>(null);
 
@@ -121,13 +126,43 @@ function AppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col font-sans">
+    <div
+      className="min-h-screen text-white flex flex-col font-sans transition-colors duration-200"
+      style={{
+        backgroundColor: uiConfig.surfaceBg,
+        fontFamily: `'${uiConfig.uiFont}', sans-serif`,
+      }}
+    >
       {currentTab !== 'editor' && (
         <Navbar
           currentTab={currentTab}
           setCurrentTab={setCurrentTab}
           onNewProjectClick={handleNewProjectClick}
         />
+      )}
+
+      {/* Floating Live Inline Edit Mode Helper Banner */}
+      {isLiveEditMode && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-2xl bg-emerald-950/95 border border-emerald-400/60 shadow-2xl flex items-center gap-3 text-xs backdrop-blur-md">
+          <Edit3 className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <span className="font-semibold text-white">
+            Live Edit Mode ON — Click any highlighted headline/text to edit directly
+          </span>
+          <button
+            onClick={() => setIsCustomizerOpen(true)}
+            className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-200 font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            <Paintbrush className="w-3 h-3" />
+            <span>Panel</span>
+          </button>
+          <button
+            onClick={() => setIsLiveEditMode(false)}
+            className="px-3 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold flex items-center gap-1 cursor-pointer"
+          >
+            <Check className="w-3.5 h-3.5" />
+            <span>Done</span>
+          </button>
+        </div>
       )}
 
       <main className="flex-1 flex flex-col">
@@ -173,17 +208,19 @@ function AppContent() {
         isOpen={isUpgradeModalOpen}
         onClose={() => setIsUpgradeModalOpen(false)}
       />
+
+      <UICustomizerDrawer onShowToast={showToast} />
     </div>
   );
 }
-
-import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <AppContent />
+        <UICustomizerProvider>
+          <AppContent />
+        </UICustomizerProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

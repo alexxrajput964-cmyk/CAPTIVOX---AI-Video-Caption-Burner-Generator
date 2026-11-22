@@ -82,26 +82,50 @@ export function renderCaptionsToCanvas(
     ctx.restore();
   }
 
-  // Draw Visual Layers (Badges / Shapes)
+  // Draw Visual Layers (Movable, Customizable Badges / Stickers / Shapes)
   if (project.visual_elements && project.visual_elements.length > 0) {
-    project.visual_elements.forEach((elem) => {
+    const sortedElements = [...project.visual_elements].sort((a, b) => (a.zIndex || 5) - (b.zIndex || 5));
+    sortedElements.forEach((elem) => {
       ctx.save();
       const elX = (elem.x / 100) * canvasWidth;
       const elY = (elem.y / 100) * canvasHeight;
-      const badgeFontSize = Math.max(14, Math.round(canvasWidth * 0.028));
-      ctx.font = `800 ${badgeFontSize}px 'Outfit', sans-serif`;
+      const scaleFactor = canvasWidth / 340;
+      const badgeFontSize = Math.max(12, Math.round((elem.fontSize || 13) * scaleFactor));
+      const badgeWeight = elem.fontWeight || 800;
+      ctx.font = `${badgeWeight} ${badgeFontSize}px 'Outfit', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      if (elem.opacity !== undefined) {
+        ctx.globalAlpha = Math.max(0.1, Math.min(1, elem.opacity));
+      }
+
+      if (elem.rotation) {
+        ctx.translate(elX, elY);
+        ctx.rotate((elem.rotation * Math.PI) / 180);
+        ctx.translate(-elX, -elY);
+      }
 
       if (elem.text) {
         const textMetrics = ctx.measureText(elem.text);
-        const w = textMetrics.width + 24;
-        const h = badgeFontSize * 1.8;
+        const padX = Math.round(14 * scaleFactor);
+        const w = textMetrics.width + padX * 2;
+        const h = badgeFontSize * 1.75;
+        const radius = elem.borderRadius !== undefined ? elem.borderRadius * scaleFactor : 8 * scaleFactor;
 
-        ctx.fillStyle = elem.bgColor || '#FF3D5A';
-        ctx.beginPath();
-        ctx.roundRect(elX - w / 2, elY - h / 2, w, h, 8);
-        ctx.fill();
+        if (elem.bgColor && elem.bgColor !== 'transparent') {
+          ctx.fillStyle = elem.bgColor;
+          ctx.beginPath();
+          ctx.roundRect(elX - w / 2, elY - h / 2, w, h, radius);
+          ctx.fill();
+        }
+
+        if (elem.borderColor) {
+          ctx.strokeStyle = elem.borderColor;
+          ctx.lineWidth = Math.max(1.5, 1.5 * scaleFactor);
+          ctx.beginPath();
+          ctx.roundRect(elX - w / 2, elY - h / 2, w, h, radius);
+          ctx.stroke();
+        }
 
         ctx.fillStyle = elem.textColor || '#FFFFFF';
         ctx.fillText(elem.text, elX, elY);
@@ -132,19 +156,30 @@ export function renderCaptionsToCanvas(
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Responsive coordinates from project position_x and position_y
-  let posX = canvasWidth * 0.5; // default center
-  if (project.position_x !== undefined) {
+  // Responsive coordinates: per-segment position overrides project default
+  let posX = canvasWidth * 0.5;
+  if (activeSegment.positionX !== undefined) {
+    posX = (activeSegment.positionX / 100) * canvasWidth;
+  } else if (project.position_x !== undefined) {
     posX = (project.position_x / 100) * canvasWidth;
   }
 
-  let posY = canvasHeight * 0.80; // default bottom
-  if (project.position_y !== undefined) {
+  let posY = canvasHeight * 0.80;
+  if (activeSegment.positionY !== undefined) {
+    posY = (activeSegment.positionY / 100) * canvasHeight;
+  } else if (project.position_y !== undefined) {
     posY = (project.position_y / 100) * canvasHeight;
   } else if (project.position === 'top') {
     posY = canvasHeight * 0.15;
   } else if (project.position === 'center') {
     posY = canvasHeight * 0.50;
+  }
+
+  // Apply canvas rotation if customized
+  if (project.rotation) {
+    ctx.translate(posX, posY);
+    ctx.rotate((project.rotation * Math.PI) / 180);
+    ctx.translate(-posX, -posY);
   }
 
   // Active word detection with audio offset
@@ -171,8 +206,9 @@ export function renderCaptionsToCanvas(
             : activeSegment.text,
         ];
 
-  // Multi-line wrap calculation
-  const maxLineWidth = canvasWidth * 0.84;
+  // Multi-line wrap calculation respecting user max_width_percent
+  const widthRatio = Math.max(0.4, Math.min(0.96, (project.max_width_percent || 84) / 100));
+  const maxLineWidth = canvasWidth * widthRatio;
   const spaceWidth = ctx.measureText(' ').width;
   const lines: { words: string[]; originalIndices: number[] }[] = [];
   let currentLineWords: string[] = [];

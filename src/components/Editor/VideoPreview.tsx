@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { CaptionProject, CaptionSegment, WordTimestamp } from '../../types';
+import { CaptionProject, CaptionSegment, VisualElement, WordTimestamp } from '../../types';
 import { getActiveWordIndex } from '../../lib/videoBurner';
 import { convertDevanagariToHinglish, hasDevanagari } from '../../lib/hinglishConverter';
 import { useSubtitleDrag } from '../../hooks/useSubtitleDrag';
@@ -20,7 +20,10 @@ import {
   ChevronRight,
   Crosshair,
   Clock,
-  Sparkles,
+  Plus,
+  Trash2,
+  Copy,
+  RotateCw,
 } from 'lucide-react';
 
 interface VideoPreviewProps {
@@ -35,9 +38,179 @@ interface VideoPreviewProps {
   hasWatermark: boolean;
   onUpdateCaptions?: (captions: CaptionSegment[]) => void;
   onUpdateStyle?: (updates: Partial<CaptionProject>) => void;
+  showSafeZoneBar?: boolean;
+  showAudioSyncBar?: boolean;
 }
 
 export type SafeZoneMode = 'none' | 'ten_percent' | 'social' | 'logo_watermark' | 'all';
+
+interface DraggableVisualLayerProps {
+  element: VisualElement;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  isSelected: boolean;
+  onSelect: () => void;
+  onChange: (updates: Partial<VisualElement>) => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}
+
+const DraggableVisualLayer: React.FC<DraggableVisualLayerProps> = ({
+  element,
+  containerRef,
+  isSelected,
+  onSelect,
+  onChange,
+  onDuplicate,
+  onDelete,
+}) => {
+  const [isEditingText, setIsEditingText] = useState(false);
+  const { isDragging, handlePointerDown } = useSubtitleDrag({
+    containerRef,
+    currentX: element.x,
+    currentY: element.y,
+    onPositionChange: (x, y) => onChange({ x, y }),
+    disabled: isEditingText,
+  });
+
+  return (
+    <div
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        onSelect();
+        handlePointerDown(e);
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        setIsEditingText(true);
+      }}
+      className={`absolute select-none touch-none cursor-grab active:cursor-grabbing pointer-events-auto transition-shadow ${
+        isSelected || isDragging ? 'ring-2 ring-cyan-400 shadow-2xl' : 'hover:ring-1 hover:ring-white/40'
+      }`}
+      style={{
+        left: `${element.x}%`,
+        top: `${element.y}%`,
+        transform: `translate(-50%, -50%) rotate(${element.rotation || 0}deg)`,
+        zIndex: (element.zIndex || 25) + (isSelected ? 10 : 0),
+        opacity: element.opacity ?? 1,
+        borderRadius: `${element.borderRadius ?? 10}px`,
+        touchAction: 'none',
+      }}
+    >
+      {/* Floating Action Toolbar when selected */}
+      {isSelected && (
+        <div
+          data-no-drag="true"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="absolute -top-9 left-1/2 -translate-x-1/2 bg-black/95 backdrop-blur-md border border-white/20 px-2 py-1 rounded-full flex items-center gap-1.5 text-[10px] text-white shadow-2xl whitespace-nowrap z-50"
+        >
+          <button
+            type="button"
+            onClick={() => setIsEditingText(true)}
+            className="text-cyan-300 hover:text-cyan-200 font-bold flex items-center gap-0.5 cursor-pointer"
+            title="Edit Text"
+          >
+            <Edit3 className="w-3 h-3" />
+            <span>Edit</span>
+          </button>
+          <span className="text-neutral-600">|</span>
+          <button
+            type="button"
+            onClick={() => onChange({ fontSize: Math.max(10, (element.fontSize || 13) - 2) })}
+            className="px-1 rounded bg-neutral-800 hover:bg-neutral-700 font-bold cursor-pointer"
+            title="Smaller"
+          >
+            A-
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ fontSize: Math.min(44, (element.fontSize || 13) + 2) })}
+            className="px-1 rounded bg-neutral-800 hover:bg-neutral-700 font-bold cursor-pointer"
+            title="Larger"
+          >
+            A+
+          </button>
+          <button
+            type="button"
+            onClick={() => onChange({ rotation: ((element.rotation || 0) + 5) % 45 })}
+            className="p-0.5 rounded bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
+            title="Rotate +5°"
+          >
+            <RotateCw className="w-3 h-3 text-amber-300" />
+          </button>
+          <input
+            type="color"
+            value={element.bgColor.startsWith('#') ? element.bgColor : '#ff3d5a'}
+            onChange={(e) => onChange({ bgColor: e.target.value })}
+            className="w-4 h-4 rounded cursor-pointer border-0 bg-transparent"
+            title="Change Background Color"
+          />
+          <button
+            type="button"
+            onClick={onDuplicate}
+            className="p-0.5 rounded hover:bg-neutral-800 text-neutral-300 cursor-pointer"
+            title="Duplicate"
+          >
+            <Copy className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="p-0.5 rounded hover:bg-red-900/60 text-rose-400 cursor-pointer"
+            title="Delete"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+
+      {isEditingText ? (
+        <div
+          data-no-drag="true"
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex items-center gap-1 bg-black/90 p-1 rounded-lg border border-cyan-400"
+        >
+          <input
+            autoFocus
+            type="text"
+            value={element.text || ''}
+            onChange={(e) => onChange({ text: e.target.value })}
+            onBlur={() => setIsEditingText(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') setIsEditingText(false);
+            }}
+            className="bg-neutral-900 text-white text-xs px-2 py-0.5 rounded focus:outline-none w-32"
+          />
+          <button
+            type="button"
+            onClick={() => setIsEditingText(false)}
+            className="p-1 bg-cyan-500 text-black rounded cursor-pointer"
+          >
+            <Check className="w-3 h-3" />
+          </button>
+        </div>
+      ) : (
+        <div
+          className="px-3 py-1 font-bold shadow-lg whitespace-nowrap"
+          style={{
+            backgroundColor: element.bgColor,
+            color: element.textColor || '#FFFFFF',
+            border: element.borderColor ? `1.5px solid ${element.borderColor}` : undefined,
+            borderRadius: `${element.borderRadius ?? 10}px`,
+            fontSize: `${element.fontSize || 13}px`,
+            fontWeight: element.fontWeight || 800,
+          }}
+        >
+          {element.text || (element.type === 'box' ? ' ' : 'TEXT')}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const VideoPreview: React.FC<VideoPreviewProps> = ({
   project,
@@ -51,12 +224,15 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
   hasWatermark,
   onUpdateCaptions,
   onUpdateStyle,
+  showSafeZoneBar = true,
+  showAudioSyncBar = true,
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isEditingInline, setIsEditingInline] = useState(false);
   const [editingText, setEditingText] = useState('');
   const [safeZoneMode, setSafeZoneMode] = useState<SafeZoneMode>('ten_percent');
-  const [showOffsetControls, setShowOffsetControls] = useState(false);
+  const [moveScope, setMoveScope] = useState<'all' | 'segment'>('all');
+  const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const subtitleBoxRef = useRef<HTMLDivElement>(null);
@@ -135,12 +311,38 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
     frameAspectRatioClass = 'aspect-[16/9] w-full max-w-md sm:max-w-lg max-h-[440px]';
   }
 
-  // Positioning: normalized percentage coordinates (0 - 100%)
-  const posX = project.position_x ?? 50;
+  // Positioning: per-segment override falls back to global project position (0 - 100%)
   let defaultPosY = 82;
   if (project.position === 'top') defaultPosY = 15;
   if (project.position === 'center') defaultPosY = 50;
-  const posY = project.position_y ?? defaultPosY;
+
+  const hasSegmentOverride =
+    activeSegment &&
+    (activeSegment.positionX !== undefined || activeSegment.positionY !== undefined);
+
+  const posX = activeSegment?.positionX ?? project.position_x ?? 50;
+  const posY = activeSegment?.positionY ?? project.position_y ?? defaultPosY;
+
+  const applyPosition = (newX: number, newY: number, posLabel?: 'top' | 'center' | 'bottom' | 'custom') => {
+    const clampedX = Math.max(5, Math.min(95, Math.round(newX)));
+    const clampedY = Math.max(5, Math.min(95, Math.round(newY)));
+
+    if (moveScope === 'segment' && activeSegment && onUpdateCaptions) {
+      const updated = (project.captions || []).map((c) =>
+        c.id === activeSegment.id ? { ...c, positionX: clampedX, positionY: clampedY } : c
+      );
+      onUpdateCaptions(updated);
+      return;
+    }
+
+    if (onUpdateStyle) {
+      onUpdateStyle({
+        position_x: clampedX,
+        position_y: clampedY,
+        position: posLabel || 'custom',
+      });
+    }
+  };
 
   // Fluid Touch & Mouse Drag Hook
   const {
@@ -148,52 +350,52 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
     isSelected,
     setIsSelected,
     isSnappedX,
-    isSnappedY,
     handlePointerDown,
   } = useSubtitleDrag({
     containerRef,
     currentX: posX,
     currentY: posY,
-    onPositionChange: (newX, newY) => {
-      if (onUpdateStyle) {
-        onUpdateStyle({
-          position_x: newX,
-          position_y: newY,
-          position: 'custom',
-        });
-      }
-    },
+    onPositionChange: (newX, newY) => applyPosition(newX, newY, 'custom'),
     disabled: isEditingInline,
   });
 
   // Quick alignment & preset setter
   const setPositionPreset = (x: number, y: number, posLabel?: 'top' | 'center' | 'bottom' | 'custom') => {
-    if (onUpdateStyle) {
-      onUpdateStyle({
-        position_x: Math.max(5, Math.min(95, x)),
-        position_y: Math.max(5, Math.min(95, y)),
-        position: posLabel || 'custom',
-      });
-    }
+    applyPosition(x, y, posLabel || 'custom');
   };
 
   // Fine Nudge Adjustments (1% increments)
   const handleNudge = (deltaX: number, deltaY: number) => {
-    if (onUpdateStyle) {
-      const newX = Math.max(5, Math.min(95, posX + deltaX));
-      const newY = Math.max(5, Math.min(95, posY + deltaY));
-      onUpdateStyle({
-        position_x: newX,
-        position_y: newY,
-        position: 'custom',
-      });
-    }
+    applyPosition(posX + deltaX, posY + deltaY, 'custom');
+  };
+
+  // Quick add a movable floating text sticker onto the video canvas
+  const handleAddFloatingText = () => {
+    if (!onUpdateStyle) return;
+    const newElem: VisualElement = {
+      id: 'elem-' + Date.now(),
+      type: 'sticker',
+      text: '🔥 Tap to Edit',
+      x: 50,
+      y: 25,
+      fontSize: 14,
+      fontWeight: 800,
+      rotation: 0,
+      borderRadius: 12,
+      opacity: 1,
+      bgColor: '#FF3D5A',
+      textColor: '#FFFFFF',
+      zIndex: 25,
+    };
+    onUpdateStyle({ visual_elements: [...(project.visual_elements || []), newElem] });
+    setSelectedElementId(newElem.id);
   };
 
   // Click outside to deselect
   const handleContainerClick = (e: React.MouseEvent) => {
     if (e.target === containerRef.current || (e.target as HTMLElement).tagName === 'VIDEO') {
       setIsSelected(false);
+      setSelectedElementId(null);
       if (isEditingInline) {
         setIsEditingInline(false);
       } else {
@@ -411,6 +613,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
       {/* ============================================================== */}
       <div className="w-full max-w-sm mb-2 flex flex-col gap-1.5">
         {/* Row 1: Safe Zone Selector & Coordinates */}
+        {showSafeZoneBar && (
         <div className="flex items-center justify-between text-xs px-1 text-neutral-400">
           <div className="flex items-center gap-1.5">
             {/* Safe Zone Toggle Pill */}
@@ -525,9 +728,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
             </button>
           </div>
         </div>
+        )}
 
-        {/* Row 2: 5 Vertical Presets (Top, Upper, Center, Lower, Bottom) */}
-        <div className="grid grid-cols-5 gap-1 text-[10px] font-semibold">
+        {/* Row 2: 5 Vertical Presets + Move Scope */}
+        <div className="grid grid-cols-6 gap-1 text-[10px] font-semibold">
           {[
             { label: 'Top', x: 50, y: 15, key: 'top' },
             { label: 'Upper', x: 50, y: 32, key: 'upper' },
@@ -541,7 +745,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
                 key={preset.key}
                 type="button"
                 onClick={() => setPositionPreset(preset.x, preset.y, preset.key as any)}
-                className={`py-1 rounded-lg border transition-all text-center ${
+                className={`py-1 rounded-lg border transition-all text-center cursor-pointer ${
                   isActive
                     ? 'bg-[#ff3d5a]/20 border-[#ff3d5a] text-white font-bold shadow'
                     : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-800'
@@ -551,9 +755,22 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
               </button>
             );
           })}
+          <button
+            type="button"
+            onClick={() => setMoveScope(moveScope === 'all' ? 'segment' : 'all')}
+            className={`py-1 rounded-lg border text-center cursor-pointer transition-all ${
+              moveScope === 'segment'
+                ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 font-bold'
+                : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:text-white'
+            }`}
+            title="Toggle Drag Scope: Move ALL Captions or ONLY Current Caption"
+          >
+            {moveScope === 'segment' ? 'This 1' : 'All'}
+          </button>
         </div>
 
         {/* Global Audio Sync Offset Bar */}
+        {showAudioSyncBar && (
         <div className="flex items-center justify-between bg-neutral-900/90 border border-neutral-800 rounded-xl px-2.5 py-1 text-[11px] text-neutral-300">
           <div className="flex items-center gap-1.5 font-mono">
             <Clock className="w-3.5 h-3.5 text-[#ff8c1a]" />
@@ -590,6 +807,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* ============================================================== */}
@@ -691,26 +909,40 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
           </div>
         )}
 
-        {/* Visual Elements Layer (Badges / Shapes) */}
+        {/* Draggable & Editable Visual Elements Layer (Badges / Floating Text / Shapes) */}
         {project.visual_elements &&
           project.visual_elements.map((elem) => (
-            <div
+            <DraggableVisualLayer
               key={elem.id}
-              className="absolute pointer-events-none transition-all"
-              style={{
-                left: `${elem.x}%`,
-                top: `${elem.y}%`,
-                transform: 'translate(-50%, -50%)',
-                backgroundColor: elem.bgColor,
-                color: elem.textColor || '#FFFFFF',
-                borderColor: elem.borderColor,
-                zIndex: elem.zIndex || 5,
+              element={elem}
+              containerRef={containerRef}
+              isSelected={selectedElementId === elem.id}
+              onSelect={() => {
+                setSelectedElementId(elem.id);
+                setIsSelected(false);
               }}
-            >
-              <span className="px-3 py-1 rounded-lg text-xs font-bold shadow-lg">
-                {elem.text}
-              </span>
-            </div>
+              onChange={(updates) => {
+                const updated = (project.visual_elements || []).map((item) =>
+                  item.id === elem.id ? { ...item, ...updates } : item
+                );
+                onUpdateStyle?.({ visual_elements: updated });
+              }}
+              onDuplicate={() => {
+                const copy: VisualElement = {
+                  ...elem,
+                  id: 'elem-' + Date.now(),
+                  x: Math.min(90, elem.x + 6),
+                  y: Math.min(90, elem.y + 6),
+                };
+                onUpdateStyle?.({ visual_elements: [...(project.visual_elements || []), copy] });
+                setSelectedElementId(copy.id);
+              }}
+              onDelete={() => {
+                const filtered = (project.visual_elements || []).filter((item) => item.id !== elem.id);
+                onUpdateStyle?.({ visual_elements: filtered });
+                if (selectedElementId === elem.id) setSelectedElementId(null);
+              }}
+            />
           ))}
 
         {/* ============================================================== */}
@@ -719,7 +951,10 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
         {activeSegment && (
           <div
             ref={subtitleBoxRef}
-            onPointerDown={handlePointerDown}
+            onPointerDown={(e) => {
+              setSelectedElementId(null);
+              handlePointerDown(e);
+            }}
             className={`absolute z-30 cursor-grab active:cursor-grabbing select-none transition-transform touch-none ${
               isDragging
                 ? 'scale-105 opacity-95 ring-2 ring-[#ff8c1a] shadow-[0_0_25px_rgba(255,140,26,0.5)] rounded-2xl'
@@ -730,8 +965,8 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
             style={{
               left: `${posX}%`,
               top: `${posY}%`,
-              transform: 'translate(-50%, -50%)',
-              maxWidth: '92%',
+              transform: `translate(-50%, -50%) rotate(${project.rotation || 0}deg)`,
+              maxWidth: `${project.max_width_percent || 92}%`,
               textAlign: textAlign,
               touchAction: 'none',
             }}
@@ -841,13 +1076,42 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
                 {(isSelected || isDragging) && (
                   <div
                     data-no-drag="true"
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 text-[10px] text-neutral-200 flex items-center gap-2 shadow-2xl whitespace-nowrap z-40 pointer-events-auto"
+                    className="absolute -top-9 left-1/2 -translate-x-1/2 bg-black/95 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/20 text-[10px] text-neutral-200 flex items-center gap-1.5 shadow-2xl whitespace-nowrap z-40 pointer-events-auto"
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center gap-1 text-[#ff8c1a] font-mono">
                       <Move className="w-3 h-3" />
                       <span>{posX}%, {posY}%</span>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setMoveScope(moveScope === 'all' ? 'segment' : 'all')}
+                      className={`px-1.5 py-0.5 rounded font-bold cursor-pointer ${
+                        moveScope === 'segment' ? 'bg-cyan-500/30 text-cyan-300' : 'bg-neutral-800 text-neutral-300'
+                      }`}
+                      title="Drag ALL captions or THIS caption only"
+                    >
+                      {moveScope === 'segment' ? 'This' : 'All'}
+                    </button>
+
+                    {hasSegmentOverride && onUpdateCaptions && activeSegment && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = (project.captions || []).map((c) =>
+                            c.id === activeSegment.id
+                              ? { ...c, positionX: undefined, positionY: undefined }
+                              : c
+                          );
+                          onUpdateCaptions(updated);
+                        }}
+                        className="text-rose-300 hover:text-rose-200 underline cursor-pointer"
+                        title="Reset custom position of this caption"
+                      >
+                        Reset
+                      </button>
+                    )}
 
                     <span className="text-neutral-600">|</span>
 
@@ -861,7 +1125,36 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
                       <span>Edit</span>
                     </button>
 
-                    <span className="text-neutral-600">|</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateStyle?.({ font_size: Math.max(2, (project.font_size || 6) - 1) })
+                      }
+                      className="px-1 rounded bg-neutral-800 hover:bg-neutral-700 font-bold cursor-pointer"
+                      title="Decrease Size"
+                    >
+                      A-
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateStyle?.({ font_size: Math.min(16, (project.font_size || 6) + 1) })
+                      }
+                      className="px-1 rounded bg-neutral-800 hover:bg-neutral-700 font-bold cursor-pointer"
+                      title="Increase Size"
+                    >
+                      A+
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateStyle?.({ rotation: ((project.rotation || 0) + 5) > 25 ? -10 : (project.rotation || 0) + 5 })
+                      }
+                      className="p-0.5 rounded bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
+                      title="Tilt / Rotate Subtitle"
+                    >
+                      <RotateCw className="w-3 h-3 text-amber-300" />
+                    </button>
 
                     <button
                       type="button"
@@ -870,7 +1163,6 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
                       title="Center Subtitle"
                     >
                       <Crosshair className="w-3 h-3 text-[#ff8c1a]" />
-                      <span>Mid</span>
                     </button>
                   </div>
                 )}
@@ -1012,6 +1304,18 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onUpdateStyle && (
+              <button
+                type="button"
+                onClick={handleAddFloatingText}
+                className="px-2 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] text-cyan-300 hover:text-white font-semibold flex items-center gap-1 cursor-pointer"
+                title="Add a movable, editable floating text sticker anywhere on the video"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Floating Text</span>
+              </button>
+            )}
+
             {activeSegment && onUpdateCaptions && (
               <button
                 type="button"
@@ -1024,7 +1328,7 @@ export const VideoPreview: React.FC<VideoPreviewProps> = ({
             )}
 
             <div className="text-[11px] font-mono text-neutral-500">
-              {project.frame} · {project.template_id}
+              {project.frame}
             </div>
           </div>
         </div>

@@ -1,20 +1,17 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useUICustomizer } from '../context/UICustomizerContext';
+import { UICustomizationConfig } from '../types';
 import {
   Upload,
   Sparkles,
-  Flame,
   Play,
   CheckCircle2,
-  Download,
-  Languages,
-  Film,
-  Zap,
   ArrowRight,
-  ShieldCheck,
   Check,
+  Edit3,
+  Heart,
 } from 'lucide-react';
-import { TIER_LIMITS } from '../lib/templates';
 
 interface LandingPageProps {
   onStartEditorWithFile: (file: File) => void;
@@ -22,12 +19,70 @@ interface LandingPageProps {
   onNavigateToDashboard: () => void;
 }
 
+const EditableCopy: React.FC<{
+  configKey: keyof UICustomizationConfig;
+  multiline?: boolean;
+  className?: string;
+}> = ({ configKey, multiline = false, className = '' }) => {
+  const { uiConfig, updateUiConfig, isLiveEditMode } = useUICustomizer();
+  const [editing, setEditing] = useState(false);
+  const value = String(uiConfig[configKey] ?? '');
+
+  if (!isLiveEditMode) {
+    return <span className={className}>{value}</span>;
+  }
+
+  if (editing) {
+    if (multiline) {
+      return (
+        <textarea
+          autoFocus
+          rows={3}
+          value={value}
+          onChange={(e) => updateUiConfig({ [configKey]: e.target.value })}
+          onBlur={() => setEditing(false)}
+          className={`w-full p-2 rounded-xl bg-neutral-900 border-2 border-emerald-400 text-white focus:outline-none ${className}`}
+        />
+      );
+    }
+    return (
+      <input
+        autoFocus
+        type="text"
+        value={value}
+        onChange={(e) => updateUiConfig({ [configKey]: e.target.value })}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') setEditing(false);
+        }}
+        className={`px-2 py-0.5 rounded-lg bg-neutral-900 border-2 border-emerald-400 text-white focus:outline-none min-w-[140px] ${className}`}
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      title="Click to edit text inline"
+      className={`cursor-text rounded px-1 -mx-1 border border-dashed border-emerald-400/70 bg-emerald-500/10 hover:bg-emerald-500/20 inline-flex items-center gap-1 ${className}`}
+    >
+      <span>{value}</span>
+      <Edit3 className="w-3 h-3 text-emerald-400 inline shrink-0" />
+    </span>
+  );
+};
+
 export const LandingPage: React.FC<LandingPageProps> = ({
   onStartEditorWithFile,
   onOpenSampleProject,
   onNavigateToDashboard,
 }) => {
-  const { user, setIsUpgradeModalOpen, setIsAuthModalOpen } = useAuth();
+  const { settings, setIsUpgradeModalOpen } = useAuth();
+  const { uiConfig } = useUICustomizer();
+  const isFreeMode = settings?.monetization_mode !== 'paid';
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -55,31 +110,43 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#0a0a0a] text-white">
+    <div className="w-full min-h-screen text-white" style={{ backgroundColor: uiConfig.surfaceBg }}>
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-12 pb-20 sm:pt-20 sm:pb-28 border-b border-neutral-900">
         {/* Subtle Ambient Glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-[#ff3d5a]/15 to-[#ff8c1a]/15 blur-[120px] pointer-events-none rounded-full" />
+        <div
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] blur-[120px] pointer-events-none rounded-full opacity-20"
+          style={{
+            background: `linear-gradient(135deg, ${uiConfig.primaryAccent}, ${uiConfig.secondaryAccent})`,
+          }}
+        />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Column: Hero Copy & Dropzone */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-amber-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-300">
-                <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse" />
-                <span>100% Free Creator Tool · Built with ❤️ by Vineet Rajput</span>
-              </div>
+              {uiConfig.showCreatorBadge && (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-amber-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-300">
+                  <Sparkles className="w-4 h-4 text-emerald-400 animate-pulse shrink-0" />
+                  <EditableCopy configKey="heroBadgeText" />
+                </div>
+              )}
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black font-outfit tracking-tight text-white leading-[1.1] text-balance">
-                Burn Viral AI Captions{' '}
-                <span className="bg-gradient-to-r from-[#ff3d5a] via-[#ff8c1a] to-[#ffcb45] bg-clip-text text-transparent">
-                  Directly Into
+                <EditableCopy configKey="heroTitlePrefix" />{' '}
+                <span
+                  className="bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage: `linear-gradient(90deg, ${uiConfig.primaryAccent}, ${uiConfig.secondaryAccent}, #ffcb45)`,
+                  }}
+                >
+                  <EditableCopy configKey="heroTitleHighlight" className="text-white" />
                 </span>{' '}
-                Your Video.
+                <EditableCopy configKey="heroTitleSuffix" />
               </h1>
 
               <p className="text-base sm:text-lg text-neutral-400 max-w-xl leading-relaxed">
-                Free India-first AI video subtitle burner built by <strong className="text-white font-semibold">Vineet Rajput</strong>. Permanently renders word-by-word animated Roman Hinglish, Hindi & English karaoke subtitles directly into 1080p MP4s — 100% free with zero watermarks.
+                <EditableCopy configKey="heroSubtitle" multiline />
               </p>
 
               {/* Upload Dropzone */}
@@ -375,20 +442,49 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Pricing Section with 18% GST */}
+      {/* Pricing / Free Launch Section */}
       <section className="py-20 border-b border-neutral-900 bg-[#0d0d0e]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-xl mx-auto mb-14">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#ff8c1a]">Transparent Pricing</span>
-            <h2 className="text-2xl sm:text-3xl font-extrabold font-outfit text-white mt-1">
-              Indian Creator Plans (18% GST Included)
-            </h2>
-            <p className="text-xs text-neutral-400 mt-2">
-              Start free with 3 daily exports, or upgrade for unlimited 4K caption burning and clean watermark-free videos.
-            </p>
-          </div>
+          {isFreeMode ? (
+            <div className="max-w-3xl mx-auto p-8 rounded-3xl bg-gradient-to-br from-emerald-950/60 via-[#141418] to-amber-950/40 border border-emerald-500/40 text-center space-y-5 shadow-2xl">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold uppercase tracking-wider">
+                <Heart className="w-3.5 h-3.5 fill-emerald-400 text-emerald-400" />
+                100% Free Community Launch
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-black font-outfit text-white">
+                Every Feature Unlocked Free Forever — ₹0
+              </h2>
+              <p className="text-sm text-neutral-300 max-w-xl mx-auto">
+                All 41 viral subtitle templates, Roman Hinglish AI transcription, 1-Click 1080p MP4 Export, and Zero Watermarks are currently 100% Free for everyone, courtesy of <strong className="text-white">Vineet Rajput</strong>.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={onNavigateToDashboard}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-extrabold text-sm hover:opacity-95 transition-opacity cursor-pointer shadow-lg"
+                >
+                  Start Creating Free Now
+                </button>
+                <button
+                  onClick={() => setIsUpgradeModalOpen(true)}
+                  className="px-5 py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-amber-300 font-bold text-sm transition-colors cursor-pointer"
+                >
+                  ❤️ Support Creator
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-center max-w-xl mx-auto mb-14">
+                <span className="text-xs font-bold uppercase tracking-wider text-[#ff8c1a]">Transparent Pricing</span>
+                <h2 className="text-2xl sm:text-3xl font-extrabold font-outfit text-white mt-1">
+                  Indian Creator Plans (18% GST Included)
+                </h2>
+                <p className="text-xs text-neutral-400 mt-2">
+                  Start free with 3 daily exports, or upgrade for unlimited 4K caption burning and clean watermark-free videos.
+                </p>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Free */}
             <div className="p-6 rounded-2xl bg-[#141416] border border-neutral-800 flex flex-col justify-between">
               <div>
@@ -541,6 +637,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
             </div>
           </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -548,7 +646,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="py-16 border-b border-neutral-900">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 rounded-2xl bg-[#141416] border border-neutral-800 flex items-center gap-4">
+            <div className="p-6 rounded-2xl border border-neutral-800 flex items-center gap-4" style={{ backgroundColor: uiConfig.cardBg }}>
               <img
                 src="/src/assets/images/creator_avatar_1_1792817870911.jpg"
                 alt="Creator Avatar"
@@ -565,7 +663,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
             </div>
 
-            <div className="p-6 rounded-2xl bg-[#141416] border border-neutral-800 flex items-center gap-4">
+            <div className="p-6 rounded-2xl border border-neutral-800 flex items-center gap-4" style={{ backgroundColor: uiConfig.cardBg }}>
               <img
                 src="/src/assets/images/creator_avatar_2_1792817870613.jpg"
                 alt="Creator Avatar"
@@ -585,25 +683,30 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* Footer with Founder Attribution */}
-      <footer className="py-12 bg-[#09090b] border-t border-neutral-900">
+      {/* Footer with Editable Founder Attribution */}
+      <footer className="py-12 border-t border-neutral-900" style={{ backgroundColor: uiConfig.surfaceBg }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between text-xs text-neutral-400 gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-[#ff3d5a] to-[#ff8c1a] flex items-center justify-center font-extrabold text-white text-sm">
-                C
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center font-extrabold text-white text-sm"
+                style={{
+                  background: `linear-gradient(135deg, ${uiConfig.primaryAccent}, ${uiConfig.secondaryAccent})`,
+                }}
+              >
+                {(uiConfig.brandName || 'C').charAt(0).toUpperCase()}
               </div>
-              <span className="font-extrabold text-white font-outfit text-base">CAPTIVOX</span>
+              <span className="font-extrabold text-white font-outfit text-base">
+                <EditableCopy configKey="brandName" />
+              </span>
             </div>
             <span className="hidden sm:inline text-neutral-600">|</span>
-            <span>
-              Crafted with ❤️ by <strong className="text-white font-bold">Vineet Rajput</strong>. 100% Free forever for creators.
-            </span>
+            <EditableCopy configKey="footerAttribution" />
           </div>
 
           <div className="flex items-center gap-4">
             <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-mono text-[11px] font-semibold">
-              ✨ 100% Free Lifetime
+              {isFreeMode ? '✨ 100% Free Lifetime' : '💎 Commercial Pro Active'}
             </span>
             <a
               href="mailto:alexxrajput964@gmail.com"

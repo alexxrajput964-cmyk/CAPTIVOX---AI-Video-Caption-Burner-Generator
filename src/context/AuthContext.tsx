@@ -1,3 +1,4 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { UserProfile, UserTier, SystemSettings } from '../types';
 
 interface AuthContextType {
@@ -96,19 +97,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     localStorage.removeItem('captivox_user_id');
-    // Revert to demo user
-    setUser({
-      id: 'demo-user',
-      email: 'creator@example.com',
-      phone: '9876543210',
-      full_name: 'Rahul Sharma',
-      tier: 'free',
-      is_admin: false,
-      exports_today: 0,
-      exports_today_date: new Date().toISOString().split('T')[0],
-      created_at: new Date().toISOString(),
-    });
-    showToast('Signed out successfully');
+    refreshUser();
+    showToast('Signed out to Owner default session');
   };
 
   const upgradeTier = async (tier: UserTier) => {

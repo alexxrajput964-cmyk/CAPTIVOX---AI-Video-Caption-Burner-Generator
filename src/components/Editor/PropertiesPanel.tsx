@@ -189,19 +189,31 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
   };
 
   // Visual element layers helpers
-  const handleAddVisualElement = (type: 'badge' | 'box' | 'bar') => {
+  const handleAddVisualElement = (type: 'badge' | 'box' | 'bar' | 'sticker') => {
     const newElem: VisualElement = {
       id: 'elem-' + Date.now(),
       type,
-      text: type === 'badge' ? 'HOT TIP' : undefined,
+      text: type === 'badge' ? 'HOT TIP' : type === 'sticker' ? '🔥 WATCH TILL END' : undefined,
       x: 50,
-      y: 70,
-      bgColor: type === 'badge' ? '#FF3D5A' : 'rgba(255, 255, 255, 0.2)',
+      y: type === 'sticker' ? 24 : 70,
+      fontSize: 14,
+      fontWeight: 800,
+      rotation: 0,
+      borderRadius: 10,
+      opacity: 1,
+      bgColor: type === 'badge' || type === 'sticker' ? '#FF3D5A' : 'rgba(255, 255, 255, 0.2)',
       textColor: '#FFFFFF',
-      zIndex: 5,
+      zIndex: 25,
     };
     const current = project.visual_elements || [];
     onUpdateStyle({ visual_elements: [...current, newElem] });
+  };
+
+  const handleUpdateVisualElement = (id: string, updates: Partial<VisualElement>) => {
+    const current = project.visual_elements || [];
+    onUpdateStyle({
+      visual_elements: current.map((e) => (e.id === id ? { ...e, ...updates } : e)),
+    });
   };
 
   const handleDeleteVisualElement = (id: string) => {
@@ -834,6 +846,50 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                   />
                 </div>
               </div>
+
+              {/* Caption Tilt / Rotation & Max Box Width */}
+              <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-neutral-800/80">
+                <div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-1">
+                    <span>Tilt / Rotation: {project.rotation ?? 0}°</span>
+                    <button
+                      onClick={() => onUpdateStyle({ rotation: 0 })}
+                      className="text-[#ff8c1a] hover:underline cursor-pointer"
+                    >
+                      0°
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={-45}
+                    max={45}
+                    step={1}
+                    value={project.rotation ?? 0}
+                    onChange={(e) => onUpdateStyle({ rotation: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-neutral-800 rounded appearance-none cursor-pointer accent-[#ff3d5a]"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-1">
+                    <span>Box Width: {project.max_width_percent ?? 92}%</span>
+                    <button
+                      onClick={() => onUpdateStyle({ max_width_percent: 92 })}
+                      className="text-[#ff8c1a] hover:underline cursor-pointer"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <input
+                    type="range"
+                    min={40}
+                    max={96}
+                    step={2}
+                    value={project.max_width_percent ?? 92}
+                    onChange={(e) => onUpdateStyle({ max_width_percent: parseInt(e.target.value) })}
+                    className="w-full h-1.5 bg-neutral-800 rounded appearance-none cursor-pointer accent-[#ff3d5a]"
+                  />
+                </div>
+              </div>
             </div>
 
             {/* Global Audio Sync Delay/Lead Offset Control */}
@@ -1103,72 +1159,161 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         )}
 
         {/* ============================================================== */}
-        {/* TAB 5: VISUAL ELEMENTS & LAYERS                               */}
+        {/* TAB 5: VISUAL ELEMENTS & MOVABLE LAYERS                       */}
         {/* ============================================================== */}
         {activeTab === 'layers' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-bold text-white text-xs">Visual Elements & Overlays</h4>
+                <h4 className="font-bold text-white text-xs">Movable Overlays, Stickers & Text Layers</h4>
                 <p className="text-[10px] text-neutral-400">
-                  Add decorative highlight badges and background shapes around subtitles.
+                  Drag directly on the video canvas or customize X/Y, size, tilt & colors here.
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => handleAddVisualElement('sticker')}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#ff3d5a]/25 to-[#ff8c1a]/25 hover:from-[#ff3d5a]/40 hover:to-[#ff8c1a]/40 border border-[#ff3d5a]/40 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+              >
+                + Floating Text
+              </button>
               <button
                 onClick={() => handleAddVisualElement('badge')}
-                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-xs font-semibold flex items-center gap-1"
+                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
               >
                 + Text Badge
               </button>
               <button
                 onClick={() => handleAddVisualElement('box')}
-                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-xs font-semibold flex items-center gap-1"
+                className="px-3 py-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-white text-xs font-semibold flex items-center gap-1 cursor-pointer"
               >
                 + Card Shape
               </button>
             </div>
 
             {/* Elements List */}
-            <div className="space-y-2 pt-1">
+            <div className="space-y-2.5 pt-1">
               {(!project.visual_elements || project.visual_elements.length === 0) ? (
                 <div className="text-center py-8 text-neutral-500 text-xs">
-                  No visual elements added yet. Click "+ Text Badge" to add one.
+                  No overlay layers added yet. Click "+ Floating Text" to add one and drag anywhere on video.
                 </div>
               ) : (
                 project.visual_elements.map((elem, idx) => (
                   <div
                     key={elem.id}
-                    className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 flex items-center justify-between text-xs"
+                    className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 space-y-2.5 text-xs"
                   >
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-neutral-500 text-[10px]">#{idx + 1}</span>
-                      <span className="capitalize font-semibold text-white">{elem.type}</span>
-                      {elem.text && (
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="font-mono text-neutral-500 text-[10px]">#{idx + 1}</span>
+                        <span className="capitalize font-semibold text-amber-400 text-[11px]">{elem.type}</span>
                         <input
                           type="text"
-                          value={elem.text}
-                          onChange={(e) => {
-                            const updated = (project.visual_elements || []).map((el) =>
-                              el.id === elem.id ? { ...el, text: e.target.value } : el
-                            );
-                            onUpdateStyle({ visual_elements: updated });
-                          }}
-                          className="bg-neutral-950 px-2 py-0.5 rounded border border-neutral-700 text-white text-[11px] w-24"
+                          value={elem.text || ''}
+                          placeholder="Overlay text..."
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { text: e.target.value })}
+                          className="bg-neutral-950 px-2 py-1 rounded border border-neutral-700 text-white text-xs flex-1 min-w-0"
                         />
-                      )}
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleUpdateVisualElement(elem.id, { x: 50, y: 50 })}
+                          className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-[10px] text-neutral-300 cursor-pointer"
+                          title="Center on video"
+                        >
+                          Center
+                        </button>
+                        <button
+                          onClick={() => handleDeleteVisualElement(elem.id)}
+                          className="p-1 rounded text-neutral-500 hover:text-red-400 cursor-pointer"
+                          title="Delete Element"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        onClick={() => handleDeleteVisualElement(elem.id)}
-                        className="p-1 rounded text-neutral-500 hover:text-red-400"
-                        title="Delete Element"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Position, Size, Tilt & Colors */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-neutral-400">
+                      <label className="block">
+                        X: {Math.round(elem.x)}%
+                        <input
+                          type="range"
+                          min={5}
+                          max={95}
+                          value={elem.x}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { x: Number(e.target.value) })}
+                          className="w-full h-1 bg-neutral-800 accent-[#ff3d5a]"
+                        />
+                      </label>
+                      <label className="block">
+                        Y: {Math.round(elem.y)}%
+                        <input
+                          type="range"
+                          min={5}
+                          max={95}
+                          value={elem.y}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { y: Number(e.target.value) })}
+                          className="w-full h-1 bg-neutral-800 accent-[#ff3d5a]"
+                        />
+                      </label>
+                      <label className="block">
+                        Size: {elem.fontSize || 14}px
+                        <input
+                          type="range"
+                          min={10}
+                          max={44}
+                          value={elem.fontSize || 14}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { fontSize: Number(e.target.value) })}
+                          className="w-full h-1 bg-neutral-800 accent-[#ff3d5a]"
+                        />
+                      </label>
+                      <label className="block">
+                        Tilt: {elem.rotation || 0}°
+                        <input
+                          type="range"
+                          min={-45}
+                          max={45}
+                          value={elem.rotation || 0}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { rotation: Number(e.target.value) })}
+                          className="w-full h-1 bg-neutral-800 accent-[#ff3d5a]"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-1 text-[10px] text-neutral-400">
+                      <label className="flex items-center gap-1.5">
+                        <span>Text Color</span>
+                        <input
+                          type="color"
+                          value={elem.textColor || '#FFFFFF'}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { textColor: e.target.value })}
+                          className="w-5 h-5 rounded cursor-pointer bg-transparent border-0"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <span>Box Color</span>
+                        <input
+                          type="color"
+                          value={elem.bgColor.startsWith('#') ? elem.bgColor : '#FF3D5A'}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { bgColor: e.target.value })}
+                          className="w-5 h-5 rounded cursor-pointer bg-transparent border-0"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 flex-1">
+                        <span>Radius: {elem.borderRadius ?? 10}px</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={30}
+                          value={elem.borderRadius ?? 10}
+                          onChange={(e) => handleUpdateVisualElement(elem.id, { borderRadius: Number(e.target.value) })}
+                          className="w-full h-1 bg-neutral-800 accent-[#ff3d5a]"
+                        />
+                      </label>
                     </div>
                   </div>
                 ))

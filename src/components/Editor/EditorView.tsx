@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { CaptionProject, CaptionSegment, TemplateDefinition } from '../../types';
+import { CaptionProject, CaptionSegment, StudioTabId, TemplateDefinition } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useUICustomizer } from '../../context/UICustomizerContext';
 import {
   ALL_TEMPLATES,
   PREMIUM_ANIMATED_TEMPLATES,
@@ -46,6 +47,9 @@ import {
   Zap,
   Loader2,
   Bookmark,
+  Paintbrush,
+  ArrowLeftRight,
+  GripVertical,
 } from 'lucide-react';
 
 interface EditorViewProps {
@@ -60,6 +64,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   onLoadExternalProject,
 }) => {
   const { user, settings, showToast } = useAuth();
+  const { uiConfig, updateUiConfig, setIsCustomizerOpen } = useUICustomizer();
   const isPaidMode = settings?.monetization_mode === 'paid';
   const includeWatermark = isPaidMode && user?.tier === 'free';
   const [project, setProject] = useState<CaptionProject>(initialProject);
@@ -73,8 +78,40 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Active right panel tab: Subtitles | Templates | Style Properties | Custom Presets
-  const [activeRightPanel, setActiveRightPanel] = useState<'subtitles' | 'templates' | 'properties' | 'presets'>('templates');
+  const visibleTabs = uiConfig.tabOrder.filter((t) => !uiConfig.hiddenTabs.includes(t));
+  const [activeRightPanel, setActiveRightPanel] = useState<StudioTabId>('templates');
   const [editorTemplateFilter, setEditorTemplateFilter] = useState<'animated' | 'seven_viral' | 'all' | 'distinct' | 'classic' | 'legacy'>('animated');
+  const viewportContainerRef = useRef<HTMLDivElement>(null);
+  const [isResizingSplit, setIsResizingSplit] = useState(false);
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.includes(activeRightPanel)) {
+      setActiveRightPanel(visibleTabs[0]);
+    }
+  }, [visibleTabs, activeRightPanel]);
+
+  useEffect(() => {
+    if (!isResizingSplit) return;
+    const handleMove = (e: PointerEvent) => {
+      const container = viewportContainerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      let pct = ((e.clientX - rect.left) / rect.width) * 100;
+      if (uiConfig.previewSide === 'right') {
+        pct = 100 - pct;
+      }
+      const clamped = Math.max(30, Math.min(68, Math.round(pct)));
+      updateUiConfig({ splitPercent: clamped });
+    };
+    const handleUp = () => setIsResizingSplit(false);
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    return () => {
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+    };
+  }, [isResizingSplit, uiConfig.previewSide, updateUiConfig]);
 
   // Autosave status
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('saved');
@@ -607,11 +644,17 @@ export const EditorView: React.FC<EditorViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#09090b] text-white overflow-hidden select-none">
+    <div
+      className="flex flex-col h-screen text-white overflow-hidden select-none"
+      style={{ backgroundColor: uiConfig.surfaceBg }}
+    >
       {/* Top Studio Header Bar */}
-      <div className="h-14 border-b border-neutral-800 bg-[#111114] px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-4">
-        {/* Left: Back & Project Title (Protected minimum width) */}
-        <div className="flex items-center gap-2.5 shrink-0 min-w-[190px] max-w-[280px]">
+      <div
+        className="h-14 border-b border-neutral-800 px-3 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-4"
+        style={{ backgroundColor: uiConfig.cardBg }}
+      >
+        {/* Left: Back & Editable Project Title */}
+        <div className="flex items-center gap-2.5 shrink-0 min-w-[190px] max-w-[300px]">
           <button
             onClick={onBackToDashboard}
             className="p-1.5 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0"
@@ -620,16 +663,23 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <ArrowLeft className="w-4 h-4" />
           </button>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="font-bold text-sm text-white truncate">
-                {project.title || 'Untitled Subtitle Project'}
-              </h1>
-              <span className="px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold tracking-wide uppercase shrink-0">
-                by Vineet Rajput
-              </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={project.title || ''}
+                onChange={(e) => handleUpdateStyle({ title: e.target.value })}
+                placeholder="Project Title..."
+                className="font-bold text-sm text-white bg-transparent hover:bg-neutral-900/80 focus:bg-neutral-900 px-1.5 py-0.5 rounded border border-transparent focus:border-neutral-700 focus:outline-none truncate w-full max-w-[160px]"
+                title="Click to rename project"
+              />
+              {uiConfig.showCreatorBadge && (
+                <span className="hidden sm:inline-block px-1.5 py-0.5 rounded bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold tracking-wide uppercase shrink-0">
+                  {uiConfig.brandSubtext}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2 text-[10px] text-neutral-400">
+            <div className="flex items-center gap-2 text-[10px] text-neutral-400 px-1.5">
               <span className="flex items-center gap-1 font-mono">
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${
@@ -648,7 +698,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </div>
         </div>
 
-        {/* Center: Tools (Bulk Update, Snap to Silence, History, Template Studio) */}
+        {/* Center: Tools (Bulk Update, Snap to Silence, History, Template Studio, UI Customizer) */}
         <div className="hidden lg:flex items-center gap-1 bg-neutral-900/90 border border-neutral-800 p-1 rounded-xl shrink-0">
           <button
             onClick={() => setIsBulkUpdateOpen(true)}
@@ -656,7 +706,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             title="Apply current style, font, and animation to all subtitles with 1 click"
           >
             <Layers className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden xl:inline">Bulk Update</span>
+            <span className="hidden xl:inline">Bulk</span>
           </button>
 
           <button
@@ -666,7 +716,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             title="Auto-snap subtitle boundaries to audio pauses and silence"
           >
             <Wand2 className={`w-3.5 h-3.5 text-[#ff8c1a] ${isAutoAdjustingSilence ? 'animate-spin' : ''}`} />
-            <span className="hidden xl:inline">{isAutoAdjustingSilence ? 'Snapping...' : 'Snap Silence'}</span>
+            <span className="hidden xl:inline">{isAutoAdjustingSilence ? 'Snapping...' : 'Snap'}</span>
           </button>
 
           <button
@@ -686,26 +736,48 @@ export const EditorView: React.FC<EditorViewProps> = ({
             <Code2 className="w-3.5 h-3.5 text-[#6366f1]" />
             <span className="hidden xl:inline">Studio v2</span>
           </button>
+
+          <button
+            onClick={() =>
+              updateUiConfig({
+                previewSide: uiConfig.previewSide === 'left' ? 'right' : uiConfig.previewSide === 'right' ? 'top' : 'left',
+              })
+            }
+            className="px-2 py-1 rounded-lg text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center gap-1 transition-colors cursor-pointer"
+            title="Move Video Preview Panel (Left / Right / Top)"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden xl:inline">Move Panel</span>
+          </button>
         </div>
 
-        {/* Right: Fast 1-Click AI + Burn & Export + Undo/Redo + Save */}
-        <div className="flex items-center gap-2 shrink-0">
-          {/* Fast 1-Click Subtitles Action (High-Speed Roman Hinglish) */}
+        {/* Right: Customize UI + Fast 1-Click AI + Burn & Export + Undo/Redo */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <button
+            onClick={() => setIsCustomizerOpen(true)}
+            className="px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+            title="Customize UI Layout, Move Tabs, Edit Texts & Theme"
+          >
+            <Paintbrush className="w-3.5 h-3.5" style={{ color: uiConfig.primaryAccent }} />
+            <span className="hidden md:inline">Customize UI</span>
+          </button>
+
+          {/* Fast 1-Click Subtitles Action */}
           <button
             onClick={handleInstantFastSubtitles}
             disabled={isFastGenerating}
             className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:opacity-95 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-orange-500/20 transition-all cursor-pointer ring-1 ring-white/30 disabled:opacity-60"
-            title="1-Click Fast AI Subtitles in Roman Hinglish with optimal viral pauses and karaoke styling"
+            title="1-Click Fast AI Subtitles in Roman Hinglish"
           >
             {isFastGenerating ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span className="truncate max-w-[120px]">{fastGenStatus || 'Generating...'}</span>
+                <span className="truncate max-w-[100px]">{fastGenStatus || 'Generating...'}</span>
               </>
             ) : (
               <>
                 <Zap className="w-3.5 h-3.5 fill-white text-amber-200" />
-                <span>⚡ Fast Subtitles</span>
+                <span className="hidden sm:inline">⚡ Fast Subtitles</span>
               </>
             )}
           </button>
@@ -739,7 +811,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
           <button
             onClick={handleManualSave}
-            className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+            className="hidden 2xl:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 hover:text-white text-xs font-medium transition-colors cursor-pointer"
             title="Download .captivox.json full project backup"
           >
             <Save className="w-3.5 h-3.5" />
@@ -750,13 +822,13 @@ export const EditorView: React.FC<EditorViewProps> = ({
           <button
             onClick={handleQuickDownloadMp4}
             disabled={isQuickExporting}
-            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition-all cursor-pointer ring-1 ring-white/20 disabled:opacity-60"
-            title="1-Click Instant MP4 Download - Burns subtitles directly into video and auto-downloads"
+            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:opacity-95 text-white text-xs font-black flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition-all cursor-pointer ring-1 ring-white/20 disabled:opacity-60"
+            title="1-Click Instant MP4 Download"
           >
             {isQuickExporting ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Burning {quickExportProgress}%...</span>
+                <span>{quickExportProgress}%</span>
               </>
             ) : (
               <>
@@ -768,28 +840,60 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
           <button
             onClick={() => setIsBurnExportOpen(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#ff3d5a] via-[#ff8c1a] to-[#ffcb45] text-white text-xs font-black flex items-center gap-1.5 hover:opacity-95 shadow-lg shadow-[#ff3d5a]/25 transition-all cursor-pointer ring-1 ring-white/20 hover:scale-[1.02]"
-            title="Burn captions permanently into MP4 video with simulation & download link"
+            className="px-3 py-1.5 rounded-xl text-white text-xs font-black flex items-center gap-1.5 hover:opacity-95 shadow-lg transition-all cursor-pointer ring-1 ring-white/20"
+            style={{
+              background: `linear-gradient(90deg, ${uiConfig.primaryAccent}, ${uiConfig.secondaryAccent})`,
+            }}
+            title="Burn captions permanently into MP4 video"
           >
             <Flame className="w-4 h-4 fill-white" />
-            <span>Burn & Export</span>
+            <span className="hidden sm:inline">Burn & Export</span>
           </button>
 
           <button
             onClick={() => setIsExportModalOpen(true)}
             className="hidden xl:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
-            title="Export formats: SRT, VTT, ASS, or Python Script"
+            title="Export SRT, VTT, ASS, or Python"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export Other</span>
           </button>
         </div>
       </div>
 
-      {/* Main Studio Viewport (Responsive Side-by-Side on md+) */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
-        {/* Area 1: Video Preview & Quick Template Strip (5 cols on md+) */}
-        <div className="md:col-span-5 border-r border-neutral-900 flex flex-col justify-between bg-[#0a0a0c] p-3 sm:p-4 overflow-y-auto min-w-0 w-full">
+      {/* Main Studio Viewport (Customizable Side-by-Side or Top Stacked + Resizable Split Divider) */}
+      <div
+        ref={viewportContainerRef}
+        className={`flex-1 flex overflow-hidden ${
+          uiConfig.previewSide === 'top'
+            ? 'flex-col overflow-y-auto'
+            : uiConfig.previewSide === 'right'
+            ? 'flex-col md:flex-row-reverse'
+            : 'flex-col md:flex-row'
+        }`}
+      >
+        {/* Area 1: Video Preview & Movable Template Strip */}
+        <div
+          className={`flex flex-col justify-between bg-[#0a0a0c] overflow-y-auto min-w-0 shrink-0 border-neutral-900 ${
+            uiConfig.previewSide === 'top'
+              ? 'w-full border-b'
+              : uiConfig.previewSide === 'right'
+              ? 'w-full md:border-l'
+              : 'w-full md:border-r'
+          } ${uiConfig.density === 'compact' ? 'p-2.5' : 'p-3 sm:p-4'}`}
+          style={{
+            width: uiConfig.previewSide === 'top' ? '100%' : undefined,
+            flexBasis: uiConfig.previewSide !== 'top' ? `${uiConfig.splitPercent}%` : undefined,
+          }}
+        >
+          {uiConfig.templateStripLocation === 'above_video' && (
+            <div className="mb-2.5">
+              <TemplateStrip
+                selectedTemplateId={project.template_id}
+                onSelectTemplate={handleApplyTemplate}
+              />
+            </div>
+          )}
+
           {/* Interactive Video Preview Canvas */}
           <div className="flex-1 flex items-center justify-center">
             <VideoPreview
@@ -807,117 +911,151 @@ export const EditorView: React.FC<EditorViewProps> = ({
               hasWatermark={includeWatermark}
               onUpdateCaptions={handleUpdateCaptions}
               onUpdateStyle={handleUpdateStyle}
+              showSafeZoneBar={uiConfig.showSafeZoneBar}
+              showAudioSyncBar={uiConfig.showAudioSyncBar}
             />
           </div>
 
-          {/* Template Strip directly below video */}
-          <div className="mt-2.5">
-            <TemplateStrip
-              selectedTemplateId={project.template_id}
-              onSelectTemplate={handleApplyTemplate}
-            />
-          </div>
+          {uiConfig.templateStripLocation === 'below_video' && (
+            <div className="mt-2.5">
+              <TemplateStrip
+                selectedTemplateId={project.template_id}
+                onSelectTemplate={handleApplyTemplate}
+              />
+            </div>
+          )}
 
-          {/* Quick Subtitle Generation Actions below Template Section */}
-          <div className="mt-3 flex flex-col items-center justify-center w-full pb-2 gap-2">
-            <button
-              type="button"
-              onClick={handleInstantFastSubtitles}
-              disabled={isFastGenerating}
-              className="neon-shimmer-btn w-full max-w-md py-3.5 px-6 rounded-2xl text-white font-black text-sm flex items-center justify-center gap-2.5 shadow-2xl cursor-pointer ring-2 ring-white/40 tracking-wider transition-all disabled:opacity-60"
-              title="1-Click Fast AI Subtitles in Roman Hinglish"
-            >
-              {isFastGenerating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="uppercase text-xs sm:text-sm">{fastGenStatus || 'Processing...'}</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-4 h-4 fill-white text-yellow-300 animate-pulse" />
-                  <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] uppercase font-extrabold text-xs sm:text-sm">
-                    ⚡ 1-Click Fast AI Subtitles
-                  </span>
-                </>
-              )}
-            </button>
+          {/* Quick Subtitle Generation Actions */}
+          {uiConfig.showFastAiBar && (
+            <div className="mt-3 flex flex-col items-center justify-center w-full pb-2 gap-2">
+              <button
+                type="button"
+                onClick={handleInstantFastSubtitles}
+                disabled={isFastGenerating}
+                className="neon-shimmer-btn w-full max-w-md py-3 px-6 rounded-2xl text-white font-black text-sm flex items-center justify-center gap-2.5 shadow-2xl cursor-pointer ring-2 ring-white/40 tracking-wider transition-all disabled:opacity-60"
+                title="1-Click Fast AI Subtitles in Roman Hinglish"
+              >
+                {isFastGenerating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="uppercase text-xs sm:text-sm">{fastGenStatus || 'Processing...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-4 h-4 fill-white text-yellow-300 animate-pulse" />
+                    <span className="drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)] uppercase font-extrabold text-xs sm:text-sm">
+                      ⚡ 1-Click Fast AI Subtitles
+                    </span>
+                  </>
+                )}
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setIsGenerateSubtitlesOpen(true)}
-              className="text-[11px] text-neutral-400 hover:text-white font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-3 h-3 text-orange-400" />
-              <span>Or open Advanced Generator (Custom Prompts, 15+ Languages)</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setIsGenerateSubtitlesOpen(true)}
+                className="text-[11px] text-neutral-400 hover:text-white font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3 text-orange-400" />
+                <span>Or open Advanced Generator (Custom Prompts, 15+ Languages)</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Area 2 & 3: Subtitles List & Properties Panel (7 cols on md+) */}
-        <div className="md:col-span-7 flex flex-col bg-[#0e0e11] overflow-hidden min-w-0 w-full">
-          {/* Screen Tabs switcher between Subtitles, Viral Templates, and Style properties */}
+        {/* Draggable Split-Pane Divider (Desktop Left/Right) */}
+        {uiConfig.previewSide !== 'top' && (
+          <div
+            onPointerDown={() => setIsResizingSplit(true)}
+            className={`hidden md:flex w-2 shrink-0 items-center justify-center cursor-col-resize transition-colors group ${
+              isResizingSplit ? 'bg-amber-500/40' : 'bg-neutral-900/60 hover:bg-neutral-800'
+            }`}
+            title="Drag to resize Video Preview vs Controls Panel"
+          >
+            <GripVertical className="w-3 h-3 text-neutral-600 group-hover:text-white" />
+          </div>
+        )}
+
+        {/* Area 2 & 3: Subtitles List & Properties Panel */}
+        <div
+          className="flex-1 flex flex-col overflow-hidden min-w-0 w-full"
+          style={{ backgroundColor: uiConfig.cardBg }}
+        >
+          {/* Reorderable & Hideable Screen Tabs */}
           <div className="p-3 border-b border-neutral-800 bg-[#141417] flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
             <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-xl border border-neutral-800 shrink-0">
-              <button
-                onClick={() => setActiveRightPanel('subtitles')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  activeRightPanel === 'subtitles'
-                    ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <List className="w-3.5 h-3.5 text-[#ff8c1a]" />
-                <span>Captions ({project.captions?.length || 0})</span>
-              </button>
-
-              <button
-                onClick={() => setActiveRightPanel('templates')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  activeRightPanel === 'templates'
-                    ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <Crown className="w-3.5 h-3.5 text-[#ff3d5a]" />
-                <span className="flex items-center gap-1.5">
-                  <span>Templates</span>
-                  <span className="px-1.5 py-0.2 rounded-full bg-[#ff3d5a]/20 text-[#ff3d5a] text-[10px] font-bold">
-                    41
-                  </span>
-                </span>
-              </button>
-
-              <button
-                onClick={() => setActiveRightPanel('properties')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  activeRightPanel === 'properties'
-                    ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5 text-[#ff8c1a]" />
-                <span>Style</span>
-              </button>
-
-              <button
-                onClick={() => setActiveRightPanel('presets')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  activeRightPanel === 'presets'
-                    ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
-                    : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                <Bookmark className="w-3.5 h-3.5 text-amber-400" />
-                <span>Presets</span>
-              </button>
+              {visibleTabs.map((tabId) => {
+                const isActive = activeRightPanel === tabId;
+                if (tabId === 'subtitles') {
+                  return (
+                    <button
+                      key="subtitles"
+                      onClick={() => setActiveRightPanel('subtitles')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                        isActive
+                          ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      <List className="w-3.5 h-3.5 text-[#ff8c1a]" />
+                      <span>Captions ({project.captions?.length || 0})</span>
+                    </button>
+                  );
+                }
+                if (tabId === 'templates') {
+                  return (
+                    <button
+                      key="templates"
+                      onClick={() => setActiveRightPanel('templates')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                        isActive
+                          ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      <Crown className="w-3.5 h-3.5 text-[#ff3d5a]" />
+                      <span className="flex items-center gap-1.5">
+                        <span>Templates</span>
+                        <span className="px-1.5 py-0.2 rounded-full bg-[#ff3d5a]/20 text-[#ff3d5a] text-[10px] font-bold">
+                          41
+                        </span>
+                      </span>
+                    </button>
+                  );
+                }
+                if (tabId === 'properties') {
+                  return (
+                    <button
+                      key="properties"
+                      onClick={() => setActiveRightPanel('properties')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                        isActive
+                          ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
+                          : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-[#ff8c1a]" />
+                      <span>Style</span>
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    key="presets"
+                    onClick={() => setActiveRightPanel('presets')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                      isActive
+                        ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-neutral-700'
+                        : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Presets</span>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
-              <span className="px-2 py-1 rounded-lg bg-neutral-900/80 border border-neutral-800 text-[11px] text-neutral-300 font-mono hidden sm:flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                <span>Roman Hinglish</span>
-              </span>
-
               <button
                 onClick={() => setIsGenerateSubtitlesOpen(true)}
                 className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 border border-orange-500/40 text-xs text-orange-300 hover:text-white font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
@@ -929,7 +1067,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           </div>
 
           {/* Active Panel View */}
-          <div className="flex-1 p-4 overflow-y-auto min-w-0">
+          <div className={`flex-1 overflow-y-auto min-w-0 ${uiConfig.density === 'compact' ? 'p-2.5' : 'p-4'}`}>
             {activeRightPanel === 'subtitles' ? (
               <SubtitleListPanel
                 captions={project.captions || []}
